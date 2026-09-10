@@ -270,10 +270,20 @@
 
     <div class="admin-section">
       <h3>Edit an existing button</h3>
-      <p class="field-label">Choose a button</p>
-      <select id="editSelect" onchange="onEditSelectChange()">
-        <option value="">— Select a button —</option>
-      </select>
+      <div style="display:flex; gap:16px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:200px;">
+          <p class="field-label">🔓 Unlocked buttons (visible on the site)</p>
+          <select id="editSelectUnlocked" onchange="onEditSelectChange('unlocked')">
+            <option value="">— Select —</option>
+          </select>
+        </div>
+        <div style="flex:1; min-width:200px;">
+          <p class="field-label">🔒 Locked buttons (hidden on the site)</p>
+          <select id="editSelectLocked" onchange="onEditSelectChange('locked')">
+            <option value="">— Select —</option>
+          </select>
+        </div>
+      </div>
 
       <div id="editFields" style="display:none;">
         <p class="field-label">Button label</p>
@@ -441,7 +451,8 @@ async function openAdminPanel(){
   populateEditSelect();
   populatePresetSelect();
   document.getElementById('editFields').style.display = 'none';
-  document.getElementById('editSelect').value = '';
+  document.getElementById('editSelectUnlocked').value = '';
+  document.getElementById('editSelectLocked').value = '';
   document.getElementById('adminOverlay').classList.add('show');
 }
 function closeAdminPanel(){
@@ -449,14 +460,26 @@ function closeAdminPanel(){
   renderHome();
 }
 
+let currentEditId = '';
+
 function populateEditSelect(){
-  const sel = document.getElementById('editSelect');
-  sel.innerHTML = '<option value="">— Select a button —</option>' +
-    buttons.map(b => `<option value="${b.id}">${escapeHtml(b.label)}</option>`).join('');
+  const unlockedSel = document.getElementById('editSelectUnlocked');
+  const lockedSel = document.getElementById('editSelectLocked');
+  const unlockedOpts = buttons.filter(b => !b.locked);
+  const lockedOpts = buttons.filter(b => b.locked);
+  unlockedSel.innerHTML = '<option value="">— Select —</option>' +
+    unlockedOpts.map(b => `<option value="${b.id}">${escapeHtml(b.label)}</option>`).join('');
+  lockedSel.innerHTML = '<option value="">— Select —</option>' +
+    lockedOpts.map(b => `<option value="${b.id}">${escapeHtml(b.label)}</option>`).join('');
 }
 
-function onEditSelectChange(){
-  const id = document.getElementById('editSelect').value;
+function onEditSelectChange(source){
+  const unlockedSel = document.getElementById('editSelectUnlocked');
+  const lockedSel = document.getElementById('editSelectLocked');
+  // Only one list should have a selection at a time, so picking in one clears the other.
+  const id = source === 'unlocked' ? unlockedSel.value : lockedSel.value;
+  if(source === 'unlocked'){ lockedSel.value = ''; } else { unlockedSel.value = ''; }
+  currentEditId = id;
   const fields = document.getElementById('editFields');
   document.getElementById('editErr').textContent = '';
   if(!id){ fields.style.display = 'none'; return; }
@@ -469,7 +492,7 @@ function onEditSelectChange(){
 }
 
 async function saveEditedButton(){
-  const id = document.getElementById('editSelect').value;
+  const id = currentEditId;
   if(!id) return;
   const label = document.getElementById('editLabel').value.trim();
   const url = document.getElementById('editUrl').value.trim();
@@ -481,12 +504,14 @@ async function saveEditedButton(){
   errEl.textContent = '';
   await loadButtons();
   populateEditSelect();
-  document.getElementById('editSelect').value = id;
+  // Reselect the button in whichever list it now belongs to (it may have moved
+  // between unlocked/locked if the lock toggle was changed).
+  document.getElementById(locked ? 'editSelectLocked' : 'editSelectUnlocked').value = id;
   renderHome();
 }
 
 async function deleteSelectedButton(){
-  const id = document.getElementById('editSelect').value;
+  const id = currentEditId;
   if(!id) return;
   if(!confirm('Delete this button permanently?')) return;
   const { error } = await sb.from('link_buttons').delete().eq('id', id);
@@ -494,7 +519,7 @@ async function deleteSelectedButton(){
   await loadButtons();
   populateEditSelect();
   document.getElementById('editFields').style.display = 'none';
-  document.getElementById('editSelect').value = '';
+  currentEditId = '';
   renderHome();
 }
 
